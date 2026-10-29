@@ -1,3 +1,12 @@
+# Журнал изменений
+
+## v0.5.1 — проверка корректности USB case
+
+- Добавлен `scripts/verify-usb-case.py`: проверка descriptor-response bytes в Raw Gadget trace против дескрипторов, скомпилированных из точного JSON-профиля.
+- Дополнительно проверяются `SET_CONFIGURATION`, expected/enabled endpoints, HID IN payloads, STALL/reset/disconnect/backend errors и, при наличии отдельного per-case PCAPNG, сопоставление host-stack наблюдений через `usb-lab.py compare`.
+- `README.md` дополнен командой и интерпретацией verdicts. Скрипт явно предупреждает, что USBPcap — host-stack capture, не электрический анализатор шины.
+- Это не подтверждает физическое тестирование на Raspberry Pi/Windows; его следует выполнить на целевом стенде.
+
 ## v0.5.0 — расширение class runtime и composite-профилей
 
 - Добавлен базовый Mass Storage Bulk-Only Transport runtime с CBW/CSW, backing image и распространёнными SCSI-командами INQUIRY, REQUEST SENSE, TEST UNIT READY, MODE SENSE, READ CAPACITY и READ/WRITE.

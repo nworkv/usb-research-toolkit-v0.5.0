@@ -1,20 +1,20 @@
-# USB Research Toolkit 0.5.0 — пошаговое руководство
+# USB Research Toolkit 0.5.1 — пошаговое руководство
 
 ## Сначала: распаковка архива
 
-Скопируйте `usb-research-toolkit-v0.5.0-class-support.zip` в `~/Downloads`, затем в терминале Raspberry Pi выполните:
+Скопируйте `usb-research-toolkit-v0.5.1-protocol-verification.zip` в `~/Downloads`, затем в терминале Raspberry Pi выполните:
 
 ```bash
 cd ~
-unzip ~/Downloads/usb-research-toolkit-v0.5.0-class-support.zip
-cd ~/usb-research-toolkit-v0.5.0
+unzip ~/Downloads/usb-research-toolkit-v0.5.1-protocol-verification.zip
+cd ~/usb-research-toolkit-v0.5.1
 ```
 
 Если вы работаете с уже склонированным Git-репозиторием, переходите в его корень вместо пути выше. Все команды ниже запускаются из корня проекта.
 
 USB Research Toolkit — исследовательский проект для эмуляции типовых USB-устройств на Linux/Raspberry Pi, тестирования их перечисления на **собственном изолированном хосте** и сопоставления событий Raw Gadget с захватом Wireshark/USBPcap.
 
-> **Важно о поддержке классов.** Версия 0.5.0 расширяет рабочие сценарии классов, но не пытается обещать «любой USB-девайс без ограничений». USB HID позволяет задавать произвольные отчёты, однако каждому устройству нужен соответствующий HID report descriptor и формат report-данных. Реализованы готовые примеры клавиатуры, мыши, геймпада/джойстика и consumer control; CDC ACM с обычными class control requests и loopback для serial data; Mass Storage BOT с backing file и основными SCSI-командами. CDC ECM/NCM, произвольные фирменные протоколы, isochronous-передачи и полноценное runtime-переключение alternate settings пока не реализованы. Composite-профили зависят от возможностей UDC и числа доступных endpoint.
+> **Важно о поддержке классов.** Версия 0.5.1 расширяет рабочие сценарии классов, но не пытается обещать «любой USB-девайс без ограничений». USB HID позволяет задавать произвольные отчёты, однако каждому устройству нужен соответствующий HID report descriptor и формат report-данных. Реализованы готовые примеры клавиатуры, мыши, геймпада/джойстика и consumer control; CDC ACM с обычными class control requests и loopback для serial data; Mass Storage BOT с backing file и основными SCSI-командами. CDC ECM/NCM, произвольные фирменные протоколы, isochronous-передачи и полноценное runtime-переключение alternate settings пока не реализованы. Composite-профили зависят от возможностей UDC и числа доступных endpoint.
 
 Raw Gadget — низкоуровневый debug-интерфейс ядра Linux, не production backend. Контролируйте все тесты только на своём тестовом хосте: даже нормальный отказ USB-устройства возможен, а экспериментальный дескриптор может привести к зависанию или перезапуску хоста.
 
@@ -70,7 +70,7 @@ sudo apt install -y dosfstools
 Откройте терминал Raspberry Pi и перейдите в корень проекта (там, где лежит `CMakeLists.txt`):
 
 ```bash
-cd ~/usb-research-toolkit-v0.5.0
+cd ~/usb-research-toolkit-v0.5.1
 ```
 
 Если вы используете другой каталог, укажите его вместо `~/usb-research-toolkit-v0.5.0`.
@@ -152,7 +152,7 @@ ls -lh /srv/usb-captures
 До фаззинга убедитесь, что простое устройство запускается. На Windows заранее начните захват. На Pi:
 
 ```bash
-cd ~/usb-research-toolkit-v0.5.0
+cd ~/usb-research-toolkit-v0.5.1
 mkdir -p runs/baseline
 sudo build/usb-connect run \
   profiles/valid/minimal-device.json \
@@ -206,7 +206,7 @@ HID-отчёт — это бинарный контракт, описывающ�
 MSC BOT использует файл-образ как блоковое хранилище. Создайте 64 MiB образ в пути, который указан в `profiles/templates/msc-bot-disk.json`:
 
 ```bash
-cd ~/usb-research-toolkit-v0.5.0
+cd ~/usb-research-toolkit-v0.5.1
 python3 scripts/create-msd-image.py --path runs/storage/usb-lab.img --size-mib 64 --format-vfat
 ```
 
@@ -579,3 +579,21 @@ sudo chown -R "$USER:$(id -gn)" runs/fuzz/ИМЯ_КАМПАНИИ
 - Microsoft Learn: [HID Usages](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hid-usages) — классы Generic Desktop, Keyboard, Joystick и Game Pad.
 
 VID/PID в шаблонах — учебные значения. Используйте только идентификаторы, разрешённые для вашей среды.
+
+
+## Проверка корректности одного случая: профиль → trace → Wireshark
+
+Одного статуса `COMPLETED` недостаточно. После сохранения отдельного PCAPNG для выбранного случая можно проверить байты дескрипторов в trace относительно точного JSON-профиля, состояние `SET_CONFIGURATION`, ожидаемые/enabled endpoints, HID IN payloads и сопоставление с наблюдениями host stack:
+
+```bash
+python3 scripts/verify-usb-case.py \
+  --profile runs/fuzz/hid-campaign-YYYYMMDD-HHMMSS/case-00002.json \
+  --device-trace runs/fuzz/hid-campaign-YYYYMMDD-HHMMSS/traces/case-00002.device.jsonl \
+  --host-pcap /srv/usb-captures/case-00002.pcapng \
+  --source windows_host \
+  --out runs/fuzz/hid-campaign-YYYYMMDD-HHMMSS/verify-case-00002.json
+```
+
+`case-00002.pcapng` должен содержать захват именно этого одного теста. Если у тебя один непрерывный PCAPNG на всю кампанию, сначала раздели его по временным окнам случаев; простое сравнение общего файла с одним trace может сопоставить одинаковые запросы из разных вариантов. Без `--host-pcap` скрипт проверяет только локальный profile/trace и честно вернёт неполный вердикт.
+
+Возможные итоговые вердикты: `PASS_OBSERVED_CORRELATED` (профиль/trace совпали, конфигурация зафиксирована, локальные проверки прошли и per-case host correlation совпала), `EXPECTED_REJECTION_POSSIBLE_NOT_CONFIGURED` (профиль не проходит strict validation и enumeration не дошло до CONFIGURED), `REVIEW_PROTOCOL_ANOMALY`, `INCOMPLETE_HOST_BYTES_NOT_VERIFIED`, `INCONCLUSIVE_SHARED_PCAP_NEEDS_PER_CASE_CAPTURE`, а также fail при несовпадении ожидаемых и trace descriptor bytes. Даже `PASS_OBSERVED_CORRELATED` означает программное подтверждение через USBPcap/host stack, а не проверку физического уровня USB; для проверки ACK/NAK/CRC требуется аппаратный USB-анализатор.
